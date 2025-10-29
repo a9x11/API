@@ -1,0 +1,217 @@
+openapi: 3.0.3
+info:
+  title: API интеграции с сервисом продажи билетов партнера
+  version: 1.0.1
+  description: Интерфейс для поиска событий, резервирования и покупки билетов, получения отчетов и обработки вебхуков от партнера.
+tags:
+  - name: Events
+    description: Работа с мероприятиями
+  - name: Orders
+    description: Создание и оплата заказов
+  - name: Webhooks
+    description: Прием уведомлений от партнера
+paths:
+  /events:
+    get:
+      tags:
+        - Events
+      summary: Получить список событий
+      description: Возвращает список доступных мероприятий с фильтрацией по дате, типу и городу.
+      parameters:
+        - name: city
+          in: query
+          schema:
+            type: string
+          description: Фильтр по городу
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Фильтр по дате
+      responses:
+        '200':
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Event'
+  /events/{eventId}:
+    get:
+      tags:
+        - Events
+      summary: Получить детали события
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Детали мероприятия
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventDetails'
+        '404':
+          description: Мероприятие не найдено
+  /orders:
+    post:
+      tags:
+        - Orders
+      summary: Создать заказ на бронирование
+      description: Создает заказ на выбранные места для указанного пользователя. Поддерживается выбор нескольких мест и разных методов оплаты.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderRequest'
+      responses:
+        '201':
+          description: Заказ успешно создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+  /orders/{orderId}/pay:
+    post:
+      tags:
+        - Orders
+      summary: Оплатить заказ
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '200':
+          description: Платеж успешно обработан
+        '402':
+          description: Ошибка при оплате
+  /webhooks/payment-status:
+    post:
+      tags:
+        - Webhooks
+      summary: Webhook об изменении статуса платежа
+      description: Партнер уведомляет систему о результатах платежа.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentWebhook'
+      responses:
+        '200':
+          description: Уведомление принято
+components:
+  schemas:
+    Event:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        city:
+          type: string
+        date:
+          type: string
+          format: date
+    EventDetails:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        venue:
+          type: string
+        schedule:
+          type: string
+        priceRange:
+          type: string
+        seatingPlanUrl:
+          type: string
+          format: uri
+    OrderRequest:
+      type: object
+      properties:
+        userId:
+          type: string
+        eventId:
+          type: string
+        selectedSeats:
+          type: array
+          description: Список выбранных мест
+          items:
+            type: string
+        paymentMethod:
+          type: string
+          description: Метод оплаты (card = банковская карта, ewallet = электронный кошелек)
+          enum:
+            - card
+            - ewallet
+      required:
+        - userId
+        - eventId
+        - selectedSeats
+        - paymentMethod
+    PaymentRequest:
+      type: object
+      properties:
+        method:
+          type: string
+          enum:
+            - card
+            - ewallet
+        details:
+          type: object
+          description: Данные для оплаты (номер карты, кошелек и т.д.)
+    OrderResponse:
+      type: object
+      properties:
+        orderId:
+          type: string
+        status:
+          type: string
+          enum:
+            - reserved
+            - paid
+            - cancelled
+        totalAmount:
+          type: number
+        currency:
+          type: string
+    PaymentWebhook:
+      type: object
+      properties:
+        orderId:
+          type: string
+        status:
+          type: string
+          enum:
+            - paid
+            - failed
+            - pending
+        transactionId:
+          type: string
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+security:
+  - ApiKeyAuth: []
